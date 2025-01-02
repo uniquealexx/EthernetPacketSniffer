@@ -22,15 +22,15 @@ void IPAddressMessage(const uint32_t* uIp, const char* szLabel) {
     printf("%s IP: \033[1m%s\033[0m\n", szLabel, inet_ntoa(addr));
 }
 
-void PacketHandler(const unsigned char* szPacket, const char* szIighlight) {
+void PacketHandler(const unsigned char* szPacket, const char* szHighlight) {
     struct ether_header* ethHeader = (struct ether_header *)szPacket;
     struct iphdr* ipHeader = (struct iphdr *)(szPacket + sizeof(struct ether_header));
 
     printf("Ethernet packet captured:\n");
-    if (strcmp(szIighlight, "mac") == 0) {
+    if (strcmp(szHighlight, "mac") == 0) {
         MacAddressMessage(ethHeader->ether_shost, "Source");
         MacAddressMessage(ethHeader->ether_dhost, "Destination");
-    } else if (strcmp(szIighlight, "ip") == 0) {
+    } else if (strcmp(szHighlight, "ip") == 0) {
         IPAddressMessage(&ipHeader->saddr, "Source");
         IPAddressMessage(&ipHeader->daddr, "Destination");
     }
@@ -46,45 +46,53 @@ void PacketHandler(const unsigned char* szPacket, const char* szIighlight) {
 }
 
 int StartSniffer(const char* szInterface, const char* szHighlight) {
-    int iSockfd;
-    struct ifreq ifIdx;
-    struct sockaddr_ll socketAddress;
-    unsigned char *szBuffer = (unsigned char *)malloc(65536);
-
-    if ((iSockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1) {
+    int iSockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    if (iSockfd == -1) {
         perror("socket");
-        return 1; // err!
+        return 1;
     }
 
-    memset(&ifIdx, 0, sizeof(struct ifreq));
+    struct ifreq ifIdx = {0};
     strncpy(ifIdx.ifr_name, szInterface, IFNAMSIZ - 1);
     if (ioctl(iSockfd, SIOCGIFINDEX, &ifIdx) < 0) {
         perror("SIOCGIFINDEX");
-        return 1; // err!
+        close(iSockfd);
+        return 1;
     }
 
-    memset(&socketAddress, 0, sizeof(struct sockaddr_ll));
-    socketAddress.sll_family = PF_PACKET;
-    socketAddress.sll_protocol = htons(ETH_P_ALL);
-    socketAddress.sll_ifindex = ifIdx.ifr_ifindex;
+    struct sockaddr_ll socketAddress = {
+        .sll_family = PF_PACKET,
+        .sll_protocol = htons(ETH_P_ALL),
+        .sll_ifindex = ifIdx.ifr_ifindex
+    };
 
     if (bind(iSockfd, (struct sockaddr *)&socketAddress, sizeof(socketAddress)) < 0) {
         perror("bind");
-        return 1; // err!
+        close(iSockfd);
+        return 1;
+    }
+
+    unsigned char *szBuffer = malloc(65536);
+    if (!szBuffer) {
+        perror("malloc");
+        close(iSockfd);
+        return 1;
     }
 
     while (1) {
         int data_size = recvfrom(iSockfd, szBuffer, 65536, 0, NULL, NULL);
         if (data_size < 0) {
             perror("recvfrom");
-            return 1; // err!
+            break;
         }
         PacketHandler(szBuffer, szHighlight);
     }
 
-    close(iSockfd);
     free(szBuffer);
+    close(iSockfd);
     return 0;
 }
+
+
 
 

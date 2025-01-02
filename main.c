@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(pHighlight, "ip") != 0 && strcmp(pHighlight, "mac") != 0) {
+        // I want to replace fprintf to perror function, but idk how I can do this :/
         fprintf(stderr, "Invalid highlight option: %s\n", pHighlight);
         HelpMessage(argv[0]);
         return 1; // err!
